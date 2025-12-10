@@ -111,6 +111,32 @@ html_code = """
             flex: 1;
         }
         
+        .progress-container {
+            margin: 10px 0;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 5px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            transition: width 0.3s ease;
+        }
+        
+        .progress-text {
+            font-size: 0.85em;
+            color: #666;
+            text-align: center;
+        }
+        
         .toggle-btn {
             background: #667eea;
             color: white;
@@ -120,6 +146,7 @@ html_code = """
             cursor: pointer;
             font-size: 0.9em;
             transition: background 0.3s;
+            margin-left: 10px;
         }
         
         .toggle-btn:hover {
@@ -161,10 +188,58 @@ html_code = """
             margin: 5px 0;
             border-radius: 5px;
             font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .resource-item:hover {
+            background: #d0e8f0;
+        }
+        
+        .resource-item.completed {
+            background: #d4edda;
+        }
+        
+        .resource-item.completed:hover {
+            background: #c3e6cb;
+        }
+        
+        .checkbox {
+            margin-right: 10px;
+            font-size: 1.2em;
+            min-width: 20px;
+        }
+        
+        .resource-text {
+            flex: 1;
+        }
+        
+        .resource-item.completed .resource-text {
+            text-decoration: line-through;
+            color: #666;
         }
         
         .hidden {
             display: none;
+        }
+        
+        .reset-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 0.9em;
+            margin: 20px auto;
+            display: block;
+            transition: background 0.3s;
+        }
+        
+        .reset-btn:hover {
+            background: #c82333;
         }
         
         @media (max-width: 768px) {
@@ -188,6 +263,8 @@ html_code = """
         <div class="search-box">
             <input type="text" id="searchInput" placeholder="Manbalarni qidiring...">
         </div>
+        
+        <button class="reset-btn" onclick="resetProgress()">🔄 Barcha belgilarni tozalash</button>
         
         <div class="categories" id="categoriesContainer"></div>
     </div>
@@ -503,6 +580,50 @@ html_code = """
             }
         };
 
+        // LocalStorage dan ma'lumotlarni yuklash
+        function loadProgress() {
+            const saved = localStorage.getItem('medicalProgress');
+            return saved ? JSON.parse(saved) : {};
+        }
+
+        // LocalStorage ga saqlash
+        function saveProgress(progress) {
+            localStorage.setItem('medicalProgress', JSON.stringify(progress));
+        }
+
+        let progress = loadProgress();
+
+        function calculateProgress(categoryName) {
+            const category = data[categoryName];
+            let total = 0;
+            let completed = 0;
+
+            Object.entries(category.subcategories).forEach(([subcat, items]) => {
+                items.forEach((item, index) => {
+                    total++;
+                    const key = `${categoryName}|||${subcat}|||${index}`;
+                    if (progress[key]) completed++;
+                });
+            });
+
+            return { completed, total, percentage: total > 0 ? Math.round((completed / total) * 100) : 0 };
+        }
+
+        function toggleItem(categoryName, subcatName, index) {
+            const key = `${categoryName}|||${subcatName}|||${index}`;
+            progress[key] = !progress[key];
+            saveProgress(progress);
+            renderCategories();
+        }
+
+        function resetProgress() {
+            if (confirm('Barcha belgilarni o\\'chirishni xohlaysizmi?')) {
+                progress = {};
+                saveProgress(progress);
+                renderCategories();
+            }
+        }
+
         function renderCategories() {
             const container = document.getElementById('categoriesContainer');
             container.innerHTML = '';
@@ -511,11 +632,21 @@ html_code = """
                 const categoryDiv = document.createElement('div');
                 categoryDiv.className = 'category';
                 
+                const stats = calculateProgress(category);
+                
                 let subcategoriesHTML = '';
                 Object.entries(content.subcategories).forEach(([subcat, items]) => {
-                    const itemsHTML = items.map(item => 
-                        `<div class="resource-item">${item}</div>`
-                    ).join('');
+                    const itemsHTML = items.map((item, index) => {
+                        const key = `${category}|||${subcat}|||${index}`;
+                        const isCompleted = progress[key];
+                        return `
+                            <div class="resource-item ${isCompleted ? 'completed' : ''}" 
+                                 onclick="toggleItem('${category}', '${subcat}', ${index})">
+                                <span class="checkbox">${isCompleted ? '✅' : '⬜'}</span>
+                                <span class="resource-text">${item}</span>
+                            </div>
+                        `;
+                    }).join('');
                     
                     subcategoriesHTML += `
                         <div class="subcategory">
@@ -531,6 +662,12 @@ html_code = """
                         <h2 class="category-title">${category}</h2>
                         <button class="toggle-btn">Ko'rish</button>
                     </div>
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${stats.percentage}%"></div>
+                        </div>
+                        <div class="progress-text">${stats.completed}/${stats.total} tugallandi (${stats.percentage}%)</div>
+                    </div>
                     <div class="subcategories">
                         ${subcategoriesHTML}
                     </div>
@@ -541,7 +678,7 @@ html_code = """
         }
 
         function toggleCategory(header) {
-            const subcategories = header.nextElementSibling;
+            const subcategories = header.parentElement.querySelector('.subcategories');
             const btn = header.querySelector('.toggle-btn');
             
             subcategories.classList.toggle('active');
@@ -569,4 +706,4 @@ html_code = """
 """
 
 # HTML komponentni ko'rsatish
-components.html(html_code, height=800, scrolling=True)
+components.html(html_code, height=900, scrolling=True)
